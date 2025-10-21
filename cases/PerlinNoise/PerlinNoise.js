@@ -1,4 +1,3 @@
-// --- Perlin Noise 基本函式 ---
 function fade(t) {
   return t * t * t * (t * (t * 6 - 15) + 10);
 }
@@ -61,20 +60,20 @@ class PerlinNoise {
   }
 }
 
-// --- 畫圖 ---
+// --- draw ---
 const canvas = document.getElementById("noiseCanvas");
 const ctx = canvas.getContext("2d");
 const imgData = ctx.createImageData(canvas.width, canvas.height);
 const data = imgData.data;
 
 const perlin = new PerlinNoise();
-const scale = 0.05; // 調整噪聲細節
+const scale = 0.05; // Adjust noise detail
 const offsetX = Math.random() * 1000;
 const offsetY = Math.random() * 1000;
 
 for (let y = 0; y < canvas.height; y++) {
   for (let x = 0; x < canvas.width; x++) {
-    const value = (perlin.noise(x * scale + offsetX, y * scale + offsetY) + 1) * 0.5; // 轉成 0~1
+    const value = (perlin.noise(x * scale + offsetX, y * scale + offsetY) + 1) * 0.5; // Convert to 0~1
     const color = Math.floor(value * 255);
     const index = (y * canvas.width + x) * 4;
     data[index] = color;

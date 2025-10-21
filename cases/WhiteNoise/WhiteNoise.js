@@ -1,7 +1,7 @@
 const canvas = document.getElementById("noiseCanvas");
 const ctx = canvas.getContext("2d");
 
-// 當視窗大小改變時，自動調整畫布大小
+// When the window is resized, adjust the canvas size
 function resizeCanvas() {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
@@ -13,7 +13,7 @@ function generateWhiteNoise() {
   const imgData = ctx.createImageData(canvas.width, canvas.height);
   const data = imgData.data;
 
-  // 為每個像素生成隨機灰階顏色
+  // Generate random grayscale color for each pixel
   for (let i = 0; i < data.length; i += 4) {
     const color = Math.random() * 255;
     data[i] = color;     // R
@@ -25,7 +25,7 @@ function generateWhiteNoise() {
   ctx.putImageData(imgData, 0, 0);
 }
 
-// 每一幀都更新畫面
+// Repaint the canvas every frame
 function animate() {
   generateWhiteNoise();
   requestAnimationFrame(animate);
