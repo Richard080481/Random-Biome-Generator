@@ -1,40 +1,173 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Perlin Noise Image Generator</title>
-  <link rel="stylesheet" href="PerlinNoise.css" />
-  <link rel="stylesheet" href="../../styles.css"/>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Perlin Noise Image Generator</title>
+    <link rel="stylesheet" href="../../styles.css"/>
+    <link href="https://cdn.jsdelivr.net/npm/prismjs/themes/prism-tomorrow.css" rel="stylesheet" />
 </head>
 <body>
-  <div class="container">
-    <h1>Perlin Noise Generation</h1>
-    <p>Hover the button below to see the animation:</p>
-    <button class="btn">Hover Me!</button>
-    <br><br>
-    <canvas id="noiseCanvas"></canvas>
-    <script src="PerlinNoise.js"></script>
-    <a href="../../index.html" class="btn">← Back to All Cases</a>
-  </div>
+    <div class="container">
+        <h1>Perlin Noise Generation</h1>
+        <p>Watch the continuously generating Perlin noise animation:</p>
+        <br><br>
+        <canvas id="noiseCanvas" width="512" height="512"></canvas>
+        <script src="PerlinNoise.js"></script>
+        <a href="../../index.html" class="btn">← Back to All Cases</a>
+    </div>
+
+    <h1>Explanation</h1>
+    <section class="code-section">
+        <h2>How It Works</h2>
+        <p>This demo shows how to create smooth, natural-looking noise using the Perlin noise algorithm. Unlike random white noise, Perlin noise generates coherent patterns that resemble natural phenomena like clouds, terrain, or waves.</p>
+
+        <details class="code-block" open>
+            <summary>View Utility Functions</summary>
+            <pre><code class="language-js">// Smoothstep interpolation function (fade)
+function fade(t) {
+    return t * t * t * (t * (t * 6 - 15) + 10);
+}
+
+// Linear interpolation between two values
+function lerp(a, b, t) {
+    return a + t * (b - a);
+}</code></pre>
+        </details>
+
+        <details class="code-block">
+            <summary>View Perlin Noise Class</summary>
+            <pre><code class="language-js">class PerlinNoise {
+    constructor() {
+        // Create permutation table
+        this.p = new Uint8Array(512);
+        for (let i = 0; i < 256; i++) this.p[i] = i;
+
+        // Shuffle for randomness
+        for (let i = 255; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [this.p[i], this.p[j]] = [this.p[j], this.p[i]];
+        }
+
+        // Duplicate for wrapping
+        for (let i = 0; i < 256; i++) this.p[i + 256] = this.p[i];
+    }
+
+    // Gradient function
+    grad(hash, x, y, z = 0) {
+        const h = hash & 15;
+        const u = h < 8 ? x : y;
+        const v = h < 4 ? y : h === 12 || h === 14 ? x : z;
+        return ((h & 1) === 0 ? u : -u) + ((h & 2) === 0 ? v : -v);
+    }
+
+    // Main noise function
+    noise(x, y, z = 0) {
+        // Find unit cube containing the point
+        const X = Math.floor(x) & 255;
+        const Y = Math.floor(y) & 255;
+        const Z = Math.floor(z) & 255;
+
+        // Get relative position within cube
+        x -= Math.floor(x);
+        y -= Math.floor(y);
+        z -= Math.floor(z);
+
+        // Compute fade curves
+        const u = fade(x);
+        const v = fade(y);
+        const w = fade(z);
+
+        // Hash coordinates of cube corners
+        const A = this.p[X] + Y;
+        const AA = this.p[A] + Z;
+        const AB = this.p[A + 1] + Z;
+        const B = this.p[X + 1] + Y;
+        const BA = this.p[B] + Z;
+        const BB = this.p[B + 1] + Z;
+
+        // Blend results from 8 corners
+        return lerp(
+            lerp(
+                lerp(this.grad(this.p[AA], x, y, z),
+                     this.grad(this.p[BA], x - 1, y, z), u),
+                lerp(this.grad(this.p[AB], x, y - 1, z),
+                     this.grad(this.p[BB], x - 1, y - 1, z), u),
+                v
+            ),
+            lerp(
+                lerp(this.grad(this.p[AA + 1], x, y, z - 1),
+                     this.grad(this.p[BA + 1], x - 1, y, z - 1), u),
+                lerp(this.grad(this.p[AB + 1], x, y - 1, z - 1),
+                     this.grad(this.p[BB + 1], x - 1, y - 1, z - 1), u),
+                v
+            ),
+            w
+        );
+    }
+}</code></pre>
+        </details>
+
+        <details class="code-block">
+            <summary>View Animation Code</summary>
+            <pre><code class="language-js">const canvas = document.getElementById("noiseCanvas");
+const ctx = canvas.getContext("2d");
+const perlin = new PerlinNoise();
+
+const scale = 0.05; // Controls noise detail
+let time = 0; // Animation time offset
+
+function animate() {
+    const imgData = ctx.createImageData(canvas.width, canvas.height);
+    const data = imgData.data;
+
+    // Increment time for smooth animation
+    time += 0.01;
+
+    for (let y = 0; y < canvas.height; y++) {
+        for (let x = 0; x < canvas.width; x++) {
+            // Use time as z-axis for 3D animated noise
+            const value = (perlin.noise(x * scale, y * scale, time) + 1) * 0.5;
+            const color = Math.floor(value * 255);
+
+            const index = (y * canvas.width + x) * 4;
+            data[index] = color;     // Red
+            data[index + 1] = color; // Green
+            data[index + 2] = color; // Blue
+            data[index + 3] = 255;   // Alpha
+        }
+    }
+
+    ctx.putImageData(imgData, 0, 0);
+    requestAnimationFrame(animate);
+}
+
+animate();</code></pre>
+        </details>
+    </section>
+
+    <!-- Prism.js JS -->
+    <script src="https://cdn.jsdelivr.net/npm/prismjs/prism.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs/components/prism-markup.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs/components/prism-javascript.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs/components/prism-css.min.js"></script>
+
+    <footer class="site-footer">
+        <div class="footer-content">
+            <div class="footer-left">
+                <h3>Random Biome Generator</h3>
+                <p>A project showcasing various noise generation techniques.</p>
+            </div>
+            <div class="footer-links">
+                <a href="../../index.html">Home</a>
+                <a href="https://richard080481.github.io/" target="_blank">Portfolio</a>
+                <a href="mailto:yh.richard.wang@gmail.com" target="_blank">Contact</a>
+                <a href="https://github.com/Richard080481" target="_blank">GitHub</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>© 2025 Yung-Hsiang Wang (Richard) — Built with Love and GitHub Pages</p>
+        </div>
+    </footer>
 </body>
-<footer class="site-footer">
-  <div class="footer-content">
-    <div class="footer-left">
-      <h3>Random Biome Generator</h3>
-      <p>A project showcasing various noise generation techniques.</p>
-    </div>
-
-    <div class="footer-links">
-      <a href="../../index.html">Home</a>
-      <a href="https://richard080481.github.io/" target="_blank">Portfolio</a>
-      <a href="mailto:yh.richard.wang@gmail.com" target="_blank">Contact</a>
-      <a href="https://github.com/Richard080481" target="_blank">GitHub</a>
-    </div>
-  </div>
-
-  <div class="footer-bottom">
-    <p>© 2025 Yung-Hsiang Wang (Richard) — Built with Love and GitHub Pages</p>
-  </div>
-</footer>
 </html>
