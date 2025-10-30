@@ -149,15 +149,15 @@ function animate() {
             const color = Math.floor(value * 255);
 
             if (animationMode === 2) {
-                // Pulsing mode - add blue tint
-                r = color * 0.8;
-                g = color * 0.9;
-                b = color;
+                // Pulsing mode - add red tint
+                r = color * 1.1;
+                g = color * 0.5;
+                b = color * 0.5;
             } else if (animationMode === 3) {
-                // Edge mode - add cyan tint
-                r = color * 0.7;
-                g = color;
-                b = color;
+                // Edge mode - add red tint
+                r = color * 1.1;
+                g = color * 0.5;
+                b = color * 0.5;
             } else {
                 // Standard grayscale
                 r = g = b = color;
