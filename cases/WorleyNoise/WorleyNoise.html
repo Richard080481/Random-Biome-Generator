@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Worley Noise Generator</title>
+    <link rel="stylesheet" href="WorleyNoise.css" />
+    <link rel="stylesheet" href="../../styles.css"/>
+    <link href="https://cdn.jsdelivr.net/npm/prismjs/themes/prism-tomorrow.css" rel="stylesheet" />
+</head>
+<body>
+    <div class="container">
+        <h1>Worley Noise Generation</h1>
+        <p>Watch the continuously generating Worley (Cellular) noise animation:</p>
+        <br><br>
+        <canvas id="noiseCanvas" width="512" height="512"></canvas>
+        <script src="WorleyNoise.js"></script>
+        <a href="../../index.html" class="btn">← Back to All Cases</a>
+    </div>
+
+    <h1>Explanation</h1>
+    <section class="code-section">
+        <h2>How It Works</h2>
+        <p>This demo shows how to create cellular patterns using Worley noise (also called Voronoi or Cellular noise). This algorithm creates organic, cell-like patterns by calculating distances to randomly placed feature points. The animation automatically cycles through 4 different modes every 5 seconds:</p>
+        <ul style="margin: 15px 0; padding-left: 40px; color: #555;">
+            <li><strong>Drift Mode:</strong> Points slowly drift with smooth random movement</li>
+            <li><strong>Circular Mode:</strong> Points orbit in circular patterns around fixed positions</li>
+            <li><strong>Pulsing Mode:</strong> Points expand and contract rhythmically (blue tint)</li>
+            <li><strong>Edge Detection Mode:</strong> Highlights cell boundaries creating mesh patterns (cyan tint)</li>
+        </ul>
+        <p>Perfect for creating textures like stone, water caustics, biological cells, or crystalline structures.</p>
+
+        <details class="code-block" open>
+            <summary>View Worley Noise Class</summary>
+            <pre><code class="language-js">class WorleyNoise {
+    constructor(numPoints = 50) {
+        this.numPoints = numPoints;
+        this.points = [];
+        this.generatePoints();
+    }
+
+    // Generate random feature points with velocity
+    generatePoints() {
+        this.points = [];
+        for (let i = 0; i < this.numPoints; i++) {
+            this.points.push({
+                x: Math.random(),
+                y: Math.random(),
+                vx: (Math.random() - 0.5) * 0.001, // velocity x
+                vy: (Math.random() - 0.5) * 0.001  // velocity y
+            });
+        }
+    }
+
+    // Calculate Euclidean distance
+    distance(x1, y1, x2, y2) {
+        const dx = x2 - x1;
+        const dy = y2 - y1;
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    // Get noise value (distance to closest point)
+    noise(x, y) {
+        let minDist = Infinity;
+        for (let i = 0; i < this.points.length; i++) {
+            const dist = this.distance(x, y,
+                this.points[i].x, this.points[i].y);
+            if (dist < minDist) minDist = dist;
+        }
+        return Math.min(minDist * 3, 1);
+    }
+
+    // Get edge detection (difference between 2 closest)
+    noise2(x, y) {
+        let minDist1 = Infinity;
+        let minDist2 = Infinity;
+
+        for (let i = 0; i < this.points.length; i++) {
+            const dist = this.distance(x, y,
+                this.points[i].x, this.points[i].y);
+
+            if (dist < minDist1) {
+                minDist2 = minDist1;
+                minDist1 = dist;
+            } else if (dist < minDist2) {
+                minDist2 = dist;
+            }
+        }
+        // Highlights cell boundaries
+        return Math.min((minDist2 - minDist1) * 10, 1);
+    }
+
+    // Update positions for drift animation
+    updatePoints() {
+        for (let i = 0; i < this.points.length; i++) {
+            this.points[i].x += this.points[i].vx;
+            this.points[i].y += this.points[i].vy;
+
+            // Wrap around edges
+            if (this.points[i].x < 0) this.points[i].x += 1;
+            if (this.points[i].x > 1) this.points[i].x -= 1;
+            if (this.points[i].y < 0) this.points[i].y += 1;
+            if (this.points[i].y > 1) this.points[i].y -= 1;
+        }
+    }
+}</code></pre>
+        </details>
+
+        <details class="code-block">
+            <summary>View Animation Code with Multiple Modes</summary>
+            <pre><code class="language-js">const canvas = document.getElementById("noiseCanvas");
+const ctx = canvas.getContext("2d");
+const worley = new WorleyNoise(50);
+
+let animationMode = 0; // 0: drift, 1: circular, 2: pulsing, 3: edge
+let time = 0;
+
+// Auto-switch animation modes every 5 seconds
+setInterval(() => {
+    animationMode = (animationMode + 1) % 4;
+}, 5000);
+
+function animate() {
+    const imgData = ctx.createImageData(canvas.width, canvas.height);
+    const data = imgData.data;
+    time += 0.01;
+
+    // Different animation modes
+    switch(animationMode) {
+        case 0: // Drift - smooth random movement
+            worley.updatePoints();
+            break;
+        case 1: // Circular motion
+            for (let i = 0; i < worley.points.length; i++) {
+                const angle = time * 0.1 + i * 2;
+                worley.points[i].x = baseX + Math.cos(angle) * 0.1;
+                worley.points[i].y = baseY + Math.sin(angle) * 0.1;
+            }
+            break;
+        case 2: // Pulsing
+            for (let i = 0; i < worley.points.length; i++) {
+                const pulse = Math.sin(time + i) * 0.15;
+                worley.points[i].x = baseX + Math.cos(i * 2) * pulse;
+                worley.points[i].y = baseY + Math.sin(i * 2) * pulse;
+            }
+            break;
+        case 3: // Edge detection mode
+            worley.updatePoints();
+            break;
+    }
+
+    // Render with mode-specific effects
+    for (let y = 0; y < canvas.height; y++) {
+        for (let x = 0; x < canvas.width; x++) {
+            const nx = x / canvas.width;
+            const ny = y / canvas.height;
+
+            // Use noise2() for edge detection mode
+            const value = animationMode === 3 ?
+                worley.noise2(nx, ny) : worley.noise(nx, ny);
+
+            const color = Math.floor(value * 255);
+            const index = (y * canvas.width + x) * 4;
+            data[index] = color;
+            data[index + 1] = color;
+            data[index + 2] = color;
+            data[index + 3] = 255;
+        }
+    }
+
+    ctx.putImageData(imgData, 0, 0);
+    requestAnimationFrame(animate);
+}
+
+animate();</code></pre>
+        </details>
+
+        <details class="code-block">
+            <summary>View Distance Calculation</summary>
+            <pre><code class="language-js">// Different distance metrics create different patterns:
+
+// 1. Euclidean (standard circular cells)
+distance(x1, y1, x2, y2) {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    return Math.sqrt(dx * dx + dy * dy);
+}
+
+// 2. Manhattan (diamond-shaped cells)
+distance(x1, y1, x2, y2) {
+    return Math.abs(x2 - x1) + Math.abs(y2 - y1);
+}
+
+// 3. Chebyshev (square cells)
+distance(x1, y1, x2, y2) {
+    return Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1));
+}</code></pre>
+        </details>
+    </section>
+
+    <!-- Prism.js JS -->
+    <script src="https://cdn.jsdelivr.net/npm/prismjs/prism.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs/components/prism-markup.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs/components/prism-javascript.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs/components/prism-css.min.js"></script>
+
+    <footer class="site-footer">
+        <div class="footer-content">
+            <div class="footer-left">
+                <h3>Random Biome Generator</h3>
+                <p>A project showcasing various noise generation techniques.</p>
+            </div>
+            <div class="footer-links">
+                <a href="../../index.html">Home</a>
+                <a href="https://richard080481.github.io/" target="_blank">Portfolio</a>
+                <a href="mailto:yh.richard.wang@gmail.com" target="_blank">Contact</a>
+                <a href="https://github.com/Richard080481" target="_blank">GitHub</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>© 2025 Yung-Hsiang Wang (Richard) — Built with Love and GitHub Pages</p>
+        </div>
+    </footer>
+</body>
+</html>
