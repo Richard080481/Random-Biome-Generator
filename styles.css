@@ -1,3 +1,4 @@
+/* Global Styles */
 * {
   margin: 0;
   padding: 0;
@@ -5,18 +6,34 @@
   font-family: 'Inter', sans-serif;
 }
 
+html,
 body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+  overflow: auto;
   background-color: #f8f9fa;
   color: #333;
   line-height: 1.6;
 }
 
+/* Canvas Styles */
+canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 8px;
+}
+
+/* Container */
 .container {
   max-width: 800px;
   margin: 30px auto;
   padding: 20px;
 }
 
+/* Headings */
 h1 {
   text-align: center;
   margin-bottom: 10px;
@@ -29,6 +46,7 @@ h1 {
   color: #555;
 }
 
+/* Test Cases */
 .testcase {
   background: #fff;
   border-radius: 12px;
@@ -47,6 +65,7 @@ h1 {
   margin-bottom: 10px;
 }
 
+/* Buttons */
 .btn {
   display: inline-block;
   background-color: #bbbcbc;
@@ -62,6 +81,64 @@ h1 {
   background-color: #808080;
 }
 
+/* Code Section */
+.code-section {
+  background-color: #f9f9f9;
+  border-top: 2px solid #eee;
+  padding: 40px 20px;
+  font-family: "Segoe UI", sans-serif;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.code-section h2 {
+  color: #333;
+  margin-bottom: 10px;
+}
+
+.code-section p {
+  color: #555;
+  margin-bottom: 20px;
+  line-height: 1.6;
+}
+
+.code-block {
+  margin-bottom: 15px;
+  background: #1e1e1e;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.code-block summary {
+  cursor: pointer;
+  background: #333;
+  color: #fff;
+  font-weight: 600;
+  padding: 10px 15px;
+  border-bottom: 1px solid #444;
+  transition: background 0.2s;
+}
+
+.code-block summary:hover {
+  background: #444;
+}
+
+.code-block pre {
+  margin: 0;
+  padding: 15px;
+  color: #dcdcdc;
+  font-family: Consolas, monospace;
+  font-size: 0.9rem;
+  overflow-x: auto;
+  white-space: pre-wrap;
+}
+
+.code-block code {
+  display: block;
+  line-height: 1.5;
+}
+
+/* Footer */
 .site-footer {
   background-color: #f8f9fa;
   color: #333;
@@ -111,6 +188,7 @@ h1 {
   color: #999;
 }
 
+/* Responsive */
 @media (max-width: 600px) {
   .footer-content {
     flex-direction: column;
