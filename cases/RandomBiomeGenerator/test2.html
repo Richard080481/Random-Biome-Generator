@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2.5D Perlin Noise Biome Generator</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+            background: #87CEEB;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        canvas {
+            display: block;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+            border: 2px solid #333;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 10;
+            background: rgba(0,0,0,0.9);
+            padding: 20px;
+            border-radius: 10px;
+            color: white;
+            min-width: 280px;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 14px;
+            cursor: pointer;
+            border-radius: 5px;
+            width: 100%;
+            margin-bottom: 15px;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        .control-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 13px;
+            color: #aaa;
+        }
+        input[type="range"] {
+            width: 100%;
+            margin-bottom: 5px;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #555;
+            background: #222;
+            color: white;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 13px;
+        }
+        .value-display {
+            font-size: 12px;
+            color: #4CAF50;
+            text-align: right;
+        }
+        #info {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #333;
+            font-size: 12px;
+            color: #888;
+        }
+        input[type="checkbox"] {
+            margin-right: 8px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    <div id="ui">
+        <button id="generateBtn">Generate New Terrain</button>
+
+        <div class="control-group">
+            <label>Random Seed</label>
+            <input type="text" id="seedInput" placeholder="Enter seed or leave blank for random">
+        </div>
+
+        <div class="control-group">
+            <label>Water Level: <span class="value-display" id="waterValue">0.38</span></label>
+            <input type="range" id="waterLevel" min="0" max="1" step="0.01" value="0.38">
+        </div>
+
+        <div class="control-group">
+            <label>Mountain Level: <span class="value-display" id="mountainValue">0.65</span></label>
+            <input type="range" id="mountainLevel" min="0" max="1" step="0.01" value="0.65">
+        </div>
+
+        <div class="control-group">
+            <label>Scale (Zoom): <span class="value-display" id="scaleValue">50</span></label>
+            <input type="range" id="scale" min="20" max="150" step="5" value="50">
+        </div>
+
+        <div class="control-group">
+            <label>View Angle: <span class="value-display" id="angleValue">30°</span></label>
+            <input type="range" id="viewAngle" min="15" max="60" step="5" value="30">
+        </div>
+
+        <div class="control-group">
+            <label>Height Scale: <span class="value-display" id="heightValue">60</span></label>
+            <input type="range" id="heightScale" min="30" max="120" step="10" value="60">
+        </div>
+
+        <div class="control-group">
+            <label>
+                <input type="checkbox" id="pixelated" checked> Pixelated Style
+            </label>
+        </div>
+
+        <div id="info">Adjust settings and generate!</div>
+    </div>
+
+    <script>
+        // Perlin Noise Implementation
+        class PerlinNoise {
+            constructor(seed = Math.random()) {
+                this.seed = seed;
+                this.p = this.generatePermutation();
+            }
+
+            generatePermutation() {
+                const p = [];
+                for (let i = 0; i < 256; i++) p[i] = i;
+
+                let rng = this.seed;
+                for (let i = 255; i > 0; i--) {
+                    rng = (rng * 9301 + 49297) % 233280;
+                    const j = Math.floor((rng / 233280) * (i + 1));
+                    [p[i], p[j]] = [p[j], p[i]];
+                }
+
+                return [...p, ...p];
+            }
+
+            fade(t) {
+                return t * t * t * (t * (t * 6 - 15) + 10);
+            }
+
+            lerp(t, a, b) {
+                return a + t * (b - a);
+            }
+
+            grad(hash, x, y, z) {
+                const h = hash & 15;
+                const u = h < 8 ? x : y;
+                const v = h < 4 ? y : h === 12 || h === 14 ? x : z;
+                return ((h & 1) === 0 ? u : -u) + ((h & 2) === 0 ? v : -v);
+            }
+
+            noise(x, y, z) {
+                const X = Math.floor(x) & 255;
+                const Y = Math.floor(y) & 255;
+                const Z = Math.floor(z) & 255;
+
+                x -= Math.floor(x);
+                y -= Math.floor(y);
+                z -= Math.floor(z);
+
+                const u = this.fade(x);
+                const v = this.fade(y);
+                const w = this.fade(z);
+
+                const A = this.p[X] + Y;
+                const AA = this.p[A] + Z;
+                const AB = this.p[A + 1] + Z;
+                const B = this.p[X + 1] + Y;
+                const BA = this.p[B] + Z;
+                const BB = this.p[B + 1] + Z;
+
+                return this.lerp(w,
+                    this.lerp(v,
+                        this.lerp(u, this.grad(this.p[AA], x, y, z),
+                            this.grad(this.p[BA], x - 1, y, z)),
+                        this.lerp(u, this.grad(this.p[AB], x, y - 1, z),
+                            this.grad(this.p[BB], x - 1, y - 1, z))),
+                    this.lerp(v,
+                        this.lerp(u, this.grad(this.p[AA + 1], x, y, z - 1),
+                            this.grad(this.p[BA + 1], x - 1, y, z - 1)),
+                        this.lerp(u, this.grad(this.p[AB + 1], x, y - 1, z - 1),
+                            this.grad(this.p[BB + 1], x - 1, y - 1, z - 1))));
+            }
+        }
+
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        // Set canvas size
+        const canvasWidth = 800;
+        const canvasHeight = 600;
+
+        canvas.width = canvasWidth;
+        canvas.height = canvasHeight;
+        canvas.style.width = canvasWidth + 'px';
+        canvas.style.height = canvasHeight + 'px';
+
+        function hashCode(str) {
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) {
+                hash = ((hash << 5) - hash) + str.charCodeAt(i);
+                hash = hash & hash;
+            }
+            return Math.abs(hash) / 2147483647;
+        }
+
+        function smoothstep(edge0, edge1, x) {
+            const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
+            return t * t * (3 - 2 * t);
+        }
+
+        function lerp(a, b, t) {
+            return a + (b - a) * t;
+        }
+
+        function lerpColor(c1, c2, t) {
+            return [
+                lerp(c1[0], c2[0], t),
+                lerp(c1[1], c2[1], t),
+                lerp(c1[2], c2[2], t)
+            ];
+        }
+
+        function generateTerrain() {
+            const waterLevel = parseFloat(document.getElementById('waterLevel').value);
+            const mountainLevel = parseFloat(document.getElementById('mountainLevel').value);
+            const scale = parseFloat(document.getElementById('scale').value);
+            const viewAngle = parseFloat(document.getElementById('viewAngle').value);
+            const heightScale = parseFloat(document.getElementById('heightScale').value);
+            const pixelated = document.getElementById('pixelated').checked;
+
+            const seedInput = document.getElementById('seedInput').value;
+            const seed = seedInput ? parseFloat(seedInput) || hashCode(seedInput) : Math.random();
+
+            const perlin = new PerlinNoise(seed);
+            const rockNoise = new PerlinNoise(seed * 2.5);
+
+            // Color definitions (RGB 0-255)
+            const deepOcean = [13, 38, 102];
+            const shallowOcean = [26, 77, 153];
+            const waterEdge = [65, 140, 200];
+            const beach1 = [194, 178, 128];
+            const beach2 = [230, 217, 153];
+            const plains = [77, 179, 51];
+            const hills = [89, 140, 64];
+            const mountainBase = [100, 100, 85];
+            const rockGray = [120, 120, 110];
+            const darkRock = [80, 80, 75];
+            const snowPeaks = [240, 240, 250];
+
+            ctx.fillStyle = '#87CEEB'; // Sky blue
+            ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+            // 2.5D isometric projection parameters
+            const gridWidth = 120;
+            const gridDepth = 120;
+            const tileWidth = 8;
+            const tileHeight = 4;
+
+            // Calculate angle for isometric view
+            const angleRad = (viewAngle * Math.PI) / 180;
+            const isoScaleX = Math.cos(angleRad);
+            const isoScaleY = Math.sin(angleRad);
+
+            // Offset to center the map
+            const offsetX = canvasWidth / 2;
+            const offsetY = 150;
+
+            // Store all tiles for depth sorting
+            const tiles = [];
+
+            // Generate terrain data
+            for (let z = 0; z < gridDepth; z++) {
+                for (let x = 0; x < gridWidth; x++) {
+                    const fx = x / scale;
+                    const fz = z / scale;
+
+                    // Multi-octave noise for height
+                    let height = 0;
+                    let amplitude = 1;
+                    let frequency = 1;
+                    let maxValue = 0;
+
+                    for (let o = 0; o < 6; o++) {
+                        height += perlin.noise(fx * frequency, fz * frequency, 0) * amplitude;
+                        maxValue += amplitude;
+                        amplitude *= 0.5;
+                        frequency *= 2;
+                    }
+
+                    height = (height / maxValue + 1) / 2; // Normalize to 0-1
+
+                    if (pixelated) {
+                        height = Math.floor(height * 12) / 12;
+                    }
+
+                    // Rock texture noise
+                    const rockDetail = rockNoise.noise(fx * 8, fz * 8, 0);
+
+                    // Determine biome and color
+                    let color;
+                    const beachStart = waterLevel - 0.02;
+                    const beachEnd = waterLevel + 0.08;
+                    const hillLevel = waterLevel + 0.20;
+                    const rockLevel = mountainLevel + 0.10;
+
+                    if (height < waterLevel) {
+                        // Ocean
+                        const depth = (waterLevel - height) / waterLevel;
+                        if (depth < 0.15) {
+                            const t = depth / 0.15;
+                            color = lerpColor(waterEdge, shallowOcean, t);
+                        } else {
+                            const t = smoothstep(0.15, 1, depth);
+                            color = lerpColor(shallowOcean, deepOcean, t);
+                        }
+                    } else if (height < beachEnd) {
+                        // Beach transition
+                        const beachProgress = (height - waterLevel) / (beachEnd - waterLevel);
+                        if (beachProgress < 0.4) {
+                            const t = beachProgress / 0.4;
+                            color = lerpColor(waterEdge, beach1, t);
+                        } else {
+                            const t = (beachProgress - 0.4) / 0.6;
+                            color = lerpColor(beach1, beach2, t);
+                        }
+                        const beachVariation = perlin.noise(fx * 15, fz * 15, 50) * 15;
+                        color = color.map(c => Math.max(0, Math.min(255, c + beachVariation)));
+                    } else if (height < hillLevel) {
+                        // Plains
+                        const t = smoothstep(beachEnd, hillLevel, height);
+                        color = lerpColor(beach2, plains, t);
+                    } else if (height < mountainLevel) {
+                        // Hills
+                        const t = smoothstep(hillLevel, mountainLevel, height);
+                        color = lerpColor(plains, hills, t);
+                    } else if (height < rockLevel) {
+                        // Mountain base
+                        const t = smoothstep(mountainLevel, rockLevel, height);
+                        color = lerpColor(hills, mountainBase, t);
+                    } else {
+                        // Rocky mountains
+                        const snowLevel = rockLevel + 0.15;
+                        if (height > snowLevel) {
+                            const t = smoothstep(rockLevel, snowLevel, height);
+                            color = lerpColor(rockGray, snowPeaks, t);
+                        } else {
+                            const rockT = (rockDetail + 1) / 2;
+                            color = lerpColor(darkRock, rockGray, rockT);
+                        }
+                        const rockVar = rockNoise.noise(fx * 20, fz * 20, 100) * 20;
+                        color = color.map(c => Math.max(0, Math.min(255, c + rockVar)));
+                    }
+
+                    tiles.push({ x, z, height, color });
+                }
+            }
+
+            // Sort tiles back to front (painter's algorithm)
+            tiles.sort((a, b) => (a.x + a.z) - (b.x + b.z));
+
+            // Render tiles in 2.5D isometric projection
+            for (const tile of tiles) {
+                const { x, z, height, color } = tile;
+
+                // Isometric transformation
+                const isoX = (x - z) * tileWidth * isoScaleX;
+                const isoY = (x + z) * tileHeight * isoScaleY;
+
+                const screenX = offsetX + isoX;
+                const screenY = offsetY + isoY - (height * heightScale);
+
+                // Calculate tile corners for diamond shape
+                const top = { x: screenX, y: screenY };
+                const right = { x: screenX + tileWidth * isoScaleX, y: screenY + tileHeight * isoScaleY };
+                const bottom = { x: screenX, y: screenY + tileHeight * 2 * isoScaleY };
+                const left = { x: screenX - tileWidth * isoScaleX, y: screenY + tileHeight * isoScaleY };
+
+                // Draw tile top (diamond)
+                const depthFade = 1 - ((x + z) / (gridWidth + gridDepth)) * 0.3;
+                const shadedColor = color.map(c => c * depthFade);
+
+                ctx.fillStyle = `rgb(${shadedColor[0]}, ${shadedColor[1]}, ${shadedColor[2]})`;
+                ctx.beginPath();
+                ctx.moveTo(top.x, top.y);
+                ctx.lineTo(right.x, right.y);
+                ctx.lineTo(bottom.x, bottom.y);
+                ctx.lineTo(left.x, left.y);
+                ctx.closePath();
+                ctx.fill();
+
+                // Draw tile sides for height
+                if (height > waterLevel) {
+                    const sideHeight = height * heightScale;
+
+                    // Right side (lighter)
+                    const rightSideColor = shadedColor.map(c => c * 0.8);
+                    ctx.fillStyle = `rgb(${rightSideColor[0]}, ${rightSideColor[1]}, ${rightSideColor[2]})`;
+                    ctx.beginPath();
+                    ctx.moveTo(right.x, right.y);
+                    ctx.lineTo(right.x, right.y + sideHeight);
+                    ctx.lineTo(bottom.x, bottom.y + sideHeight);
+                    ctx.lineTo(bottom.x, bottom.y);
+                    ctx.closePath();
+                    ctx.fill();
+
+                    // Left side (darker)
+                    const leftSideColor = shadedColor.map(c => c * 0.6);
+                    ctx.fillStyle = `rgb(${leftSideColor[0]}, ${leftSideColor[1]}, ${leftSideColor[2]})`;
+                    ctx.beginPath();
+                    ctx.moveTo(left.x, left.y);
+                    ctx.lineTo(left.x, left.y + sideHeight);
+                    ctx.lineTo(bottom.x, bottom.y + sideHeight);
+                    ctx.lineTo(bottom.x, bottom.y);
+                    ctx.closePath();
+                    ctx.fill();
+                }
+            }
+
+            document.getElementById('info').textContent =
+                `2.5D Terrain! Water: ${(waterLevel * 100).toFixed(0)}%, Mountains: ${(mountainLevel * 100).toFixed(0)}%, Angle: ${viewAngle}°`;
+        }
+
+        // UI event listeners
+        document.getElementById('generateBtn').addEventListener('click', generateTerrain);
+
+        document.getElementById('waterLevel').addEventListener('input', (e) => {
+            document.getElementById('waterValue').textContent = parseFloat(e.target.value).toFixed(2);
+        });
+
+        document.getElementById('mountainLevel').addEventListener('input', (e) => {
+            document.getElementById('mountainValue').textContent = parseFloat(e.target.value).toFixed(2);
+        });
+
+        document.getElementById('scale').addEventListener('input', (e) => {
+            document.getElementById('scaleValue').textContent = e.target.value;
+        });
+
+        document.getElementById('viewAngle').addEventListener('input', (e) => {
+            document.getElementById('angleValue').textContent = e.target.value + '°';
+        });
+
+        document.getElementById('heightScale').addEventListener('input', (e) => {
+            document.getElementById('heightValue').textContent = e.target.value;
+        });
+
+        // Generate initial terrain
+        generateTerrain();
+    </script>
+</body>
+</html>

@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2D Minecraft Map Generator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: #1a1a1a;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            display: flex;
+            gap: 30px;
+            align-items: flex-start;
+            max-width: 1200px;
+        }
+
+        #canvas {
+            border: 3px solid #00aa00;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+            background: #000;
+        }
+
+        .controls {
+            background: rgba(0, 0, 0, 0.9);
+            padding: 25px;
+            border-radius: 8px;
+            border: 2px solid #00aa00;
+            min-width: 280px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .controls h2 {
+            margin-bottom: 20px;
+            color: #00ff00;
+            font-size: 20px;
+        }
+
+        .control-group {
+            margin-bottom: 20px;
+        }
+
+        .control-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 13px;
+            color: #aaa;
+            font-weight: bold;
+        }
+
+        .control-group input,
+        .control-group select {
+            width: 100%;
+            padding: 10px;
+            background: #222;
+            border: 1px solid #00aa00;
+            color: #0f0;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+
+        .control-group input:focus,
+        .control-group select:focus {
+            outline: none;
+            border-color: #00ff00;
+        }
+
+        .value-display {
+            display: inline-block;
+            float: right;
+            color: #00ff00;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            background: #00aa00;
+            color: #000;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 14px;
+            margin-bottom: 10px;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background: #00ff00;
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        .info-box {
+            background: rgba(0, 0, 0, 0.9);
+            padding: 20px;
+            border-radius: 8px;
+            border: 2px solid #00aa00;
+            font-size: 12px;
+            margin-top: 20px;
+        }
+
+        .info-box h3 {
+            color: #00ff00;
+            margin-bottom: 12px;
+            font-size: 14px;
+        }
+
+        .biome-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .biome-color {
+            width: 24px;
+            height: 24px;
+            border-radius: 2px;
+            margin-right: 12px;
+            border: 1px solid #666;
+        }
+
+        @media (max-width: 900px) {
+            .container {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div>
+            <canvas id="canvas"></canvas>
+        </div>
+
+        <div class="controls">
+            <h2>🎮 Map Generator</h2>
+
+            <div class="control-group">
+                <label>Seed:</label>
+                <input type="number" id="seed" value="42" min="0" max="999999">
+            </div>
+
+            <div class="control-group">
+                <label>Map Size:</label>
+                <select id="mapSize">
+                    <option value="256">256x256</option>
+                    <option value="512" selected>512x512</option>
+                    <option value="1024">1024x1024</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label>Block Size (pixels):</label>
+                <select id="blockSize">
+                    <option value="1">1px</option>
+                    <option value="2" selected>2px</option>
+                    <option value="4">4px</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label>Scale: <span class="value-display" id="scaleValue">50</span></label>
+                <input type="range" id="scale" min="20" max="150" value="50">
+            </div>
+
+            <div class="control-group">
+                <label>Persistence: <span class="value-display" id="persistenceValue">0.5</span></label>
+                <input type="range" id="persistence" min="0.1" max="0.9" step="0.1" value="0.5">
+            </div>
+
+            <div class="control-group">
+                <label>Lacunarity: <span class="value-display" id="lacunarityValue">2.0</span></label>
+                <input type="range" id="lacunarity" min="1.5" max="3.5" step="0.1" value="2.0">
+            </div>
+
+            <button onclick="generateMap()">🔄 Generate Map</button>
+            <button onclick="downloadMap()">⬇️ Download PNG</button>
+
+            <div class="info-box">
+                <h3>Biomes:</h3>
+                <div class="biome-item">
+                    <div class="biome-color" style="background: #1a47a8;"></div>
+                    <span>Deep Water</span>
+                </div>
+                <div class="biome-item">
+                    <div class="biome-color" style="background: #3366ff;"></div>
+                    <span>Water</span>
+                </div>
+                <div class="biome-item">
+                    <div class="biome-color" style="background: #ffaa00;"></div>
+                    <span>Sand/Desert</span>
+                </div>
+                <div class="biome-item">
+                    <div class="biome-color" style="background: #33aa33;"></div>
+                    <span>Grass</span>
+                </div>
+                <div class="biome-item">
+                    <div class="biome-color" style="background: #1a6b1a;"></div>
+                    <span>Forest</span>
+                </div>
+                <div class="biome-item">
+                    <div class="biome-color" style="background: #888888;"></div>
+                    <span>Stone</span>
+                </div>
+                <div class="biome-item">
+                    <div class="biome-color" style="background: #ffffff;"></div>
+                    <span>Snow</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Seeded random
+        function seededRandom(seed) {
+            return function() {
+                seed = (seed * 9301 + 49297) % 233280;
+                return seed / 233280;
+            };
+        }
+
+        // Hash function for Perlin noise
+        function hash(x, y, seed) {
+            let n = Math.sin(x * 12.9898 + y * 78.233 + seed * 45.164) * 43758.5453;
+            return n - Math.floor(n);
+        }
+
+        // Smoothstep function
+        function smoothstep(t) {
+            return t * t * (3 - 2 * t);
+        }
+
+        // Perlin noise
+        function perlinNoise(x, y, seed) {
+            const xi = Math.floor(x);
+            const yi = Math.floor(y);
+            const xf = x - xi;
+            const yf = y - yi;
+
+            const u = smoothstep(xf);
+            const v = smoothstep(yf);
+
+            const h00 = hash(xi, yi, seed);
+            const h10 = hash(xi + 1, yi, seed);
+            const h01 = hash(xi, yi + 1, seed);
+            const h11 = hash(xi + 1, yi + 1, seed);
+
+            const x0 = h00 * (1 - u) + h10 * u;
+            const x1 = h01 * (1 - u) + h11 * u;
+            return x0 * (1 - v) + x1 * v;
+        }
+
+        // Get biome color based on height
+        function getBiomeColor(height) {
+            if (height < 0.2) return 0x1a47a8; // Deep water
+            if (height < 0.35) return 0x3366ff; // Water
+            if (height < 0.45) return 0xffaa00; // Sand
+            if (height < 0.55) return 0x33aa33; // Grass
+            if (height < 0.65) return 0x1a6b1a; // Forest
+            if (height < 0.8) return 0x888888; // Stone
+            return 0xffffff; // Snow
+        }
+
+        // RGB to Hex string
+        function colorToRGB(color) {
+            const r = (color >> 16) & 255;
+            const g = (color >> 8) & 255;
+            const b = color & 255;
+            return {r, g, b};
+        }
+
+        // Generate map
+        function generateMap() {
+            const seed = parseInt(document.getElementById('seed').value) || 42;
+            const size = parseInt(document.getElementById('mapSize').value);
+            const blockSize = parseInt(document.getElementById('blockSize').value);
+            const scale = parseFloat(document.getElementById('scale').value);
+            const persistence = parseFloat(document.getElementById('persistence').value);
+            const lacunarity = parseFloat(document.getElementById('lacunarity').value);
+
+            const canvas = document.getElementById('canvas');
+            const displaySize = size / blockSize;
+            canvas.width = displaySize;
+            canvas.height = displaySize;
+
+            const ctx = canvas.getContext('2d');
+            const imageData = ctx.createImageData(displaySize, displaySize);
+            const data = imageData.data;
+
+            // Generate heightmap
+            let amplitude = 1;
+            let frequency = 1;
+            let maxValue = 0;
+            const numOctaves = 6;
+
+            const heightmap = new Array(size);
+            for (let i = 0; i < size; i++) {
+                heightmap[i] = new Array(size).fill(0);
+            }
+
+            for (let octave = 0; octave < numOctaves; octave++) {
+                for (let i = 0; i < size; i++) {
+                    for (let j = 0; j < size; j++) {
+                        const n = perlinNoise(
+                            (i * frequency) / scale,
+                            (j * frequency) / scale,
+                            seed + octave * 1000
+                        );
+                        heightmap[i][j] += n * amplitude;
+                    }
+                }
+                maxValue += amplitude;
+                amplitude *= persistence;
+                frequency *= lacunarity;
+            }
+
+            // Fill canvas with biome colors
+            for (let i = 0; i < displaySize; i++) {
+                for (let j = 0; j < displaySize; j++) {
+                    const mapX = Math.floor(i * blockSize);
+                    const mapY = Math.floor(j * blockSize);
+                    const height = heightmap[mapX][mapY] / maxValue;
+                    const color = getBiomeColor(height);
+                    const rgb = colorToRGB(color);
+
+                    const pixelIndex = (j * displaySize + i) * 4;
+                    data[pixelIndex] = rgb.r;
+                    data[pixelIndex + 1] = rgb.g;
+                    data[pixelIndex + 2] = rgb.b;
+                    data[pixelIndex + 3] = 255;
+                }
+            }
+
+            ctx.putImageData(imageData, 0, 0);
+        }
+
+        // Download map
+        function downloadMap() {
+            const canvas = document.getElementById('canvas');
+            const link = document.createElement('a');
+            link.href = canvas.toDataURL('image/png');
+            link.download = 'minecraft_map.png';
+            link.click();
+        }
+
+        // Update slider displays
+        document.getElementById('scale').addEventListener('input', (e) => {
+            document.getElementById('scaleValue').textContent = e.target.value;
+        });
+        document.getElementById('persistence').addEventListener('input', (e) => {
+            document.getElementById('persistenceValue').textContent = e.target.value;
+        });
+        document.getElementById('lacunarity').addEventListener('input', (e) => {
+            document.getElementById('lacunarityValue').textContent = e.target.value;
+        });
+
+        // Generate on load
+        generateMap();
+    </script>
+</body>
+</html>
