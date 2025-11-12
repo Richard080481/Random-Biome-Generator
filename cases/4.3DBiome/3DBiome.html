@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebGL Biome Generator</title>
+    <link rel="stylesheet" href="../../styles.css"/>
+    <link rel="stylesheet" href="3DBiome.css"/>
+</head>
+<body>
+    <canvas id="glCanvas"></canvas>
+    <div id="ui">
+        <button id="generateBtn">Generate New Terrain</button>
+
+        <div class="control-group">
+            <label>Random Seed</label>
+            <input type="text" id="seedInput" placeholder="Enter seed or leave blank for random">
+        </div>
+
+        <div class="control-group">
+            <label>Water Level: <span class="value-display" id="waterValue">0.30</span></label>
+            <input type="range" id="waterLevel" min="0" max="1" step="0.01" value="0.30">
+        </div>
+
+        <div class="control-group">
+            <label>Mountain Frequency: <span class="value-display" id="mountainValue">0.40</span></label>
+            <input type="range" id="mountainFreq" min="0" max="1" step="0.01" value="0.40">
+        </div>
+
+        <div class="control-group">
+            <label>Terrain Smoothness: <span class="value-display" id="smoothValue">3</span></label>
+            <input type="range" id="smoothness" min="1" max="10" step="1" value="3">
+        </div>
+
+        <div class="control-group">
+            <label>
+                <input type="checkbox" id="pixelated" checked> Pixelated/Voxel Style (Minecraft-like)
+            </label>
+        </div>
+
+        <div id="info">Adjust settings and generate!</div>
+    </div>
+
+    <script src="3DBiome.js"></script>
+
+        <h1>Explanation</h1>
+    <section class="code-section">
+        <h2>How It Works</h2>
+        <p>
+            This WebGL demo generates 3D terrain using <strong>Perlin noise</strong> and
+            procedural biome blending. It simulates realistic landscapes by combining
+            multiple noise layers and mapping height values to different biomes
+            such as ocean, beach, plains, mountains, and snow peaks.
+            Users can customize terrain features in real time using the sliders
+            and seed input to generate unique worlds each time.
+        </p>
+
+        <ul style="margin: 15px 0; padding-left: 40px; color: #555;">
+            <li><strong>Perlin Noise:</strong> Used to produce smooth, natural variations in height.</li>
+            <li><strong>Water Level:</strong> Adjusts the cutoff height separating land and ocean.</li>
+            <li><strong>Mountain Frequency:</strong> Controls the roughness and steepness of terrain.</li>
+            <li><strong>Smoothness:</strong> Defines how many noise octaves are layered for detail.</li>
+            <li><strong>Voxel Style:</strong> Toggles between smooth shading and pixelated Minecraft-like look.</li>
+        </ul>
+
+        <p>
+            The terrain is built as a grid of vertices in 3D space. Each vertex's height
+            is determined by combining multiple layers of Perlin noise. The resulting
+            height value is then assigned a color based on biome thresholds.
+            The scene is shaded using <strong>Phong lighting</strong> to simulate realistic
+            light and shadow effects.
+        </p>
+
+        <details class="code-block" open>
+            <summary>View Perlin Noise Class</summary>
+            <pre><code class="language-js">class PerlinNoise {
+    constructor(seed = Math.random()) {
+        this.seed = seed;
+        this.p = this.generatePermutation();
+    }
+
+    generatePermutation() {
+        const p = [];
+        for (let i = 0; i < 256; i++) p[i] = i;
+        let rng = this.seed;
+        for (let i = 255; i > 0; i--) {
+            rng = (rng * 9301 + 49297) % 233280;
+            const j = Math.floor((rng / 233280) * (i + 1));
+            [p[i], p[j]] = [p[j], p[i]];
+        }
+        return [...p, ...p];
+    }
+
+    fade(t) { return t * t * t * (t * (t * 6 - 15) + 10); }
+    lerp(t, a, b) { return a + t * (b - a); }
+
+    grad(hash, x, y, z) {
+        const h = hash & 15;
+        const u = h < 8 ? x : y;
+        const v = h < 4 ? y : h === 12 || h === 14 ? x : z;
+        return ((h & 1) === 0 ? u : -u) + ((h & 2) === 0 ? v : -v);
+    }
+
+    noise(x, y, z) {
+        const X = Math.floor(x) & 255;
+        const Y = Math.floor(y) & 255;
+        const Z = Math.floor(z) & 255;
+        x -= Math.floor(x);
+        y -= Math.floor(y);
+        z -= Math.floor(z);
+        const u = this.fade(x), v = this.fade(y), w = this.fade(z);
+        const A = this.p[X] + Y, AA = this.p[A] + Z, AB = this.p[A + 1] + Z;
+        const B = this.p[X + 1] + Y, BA = this.p[B] + Z, BB = this.p[B + 1] + Z;
+        return this.lerp(w,
+            this.lerp(v,
+                this.lerp(u, this.grad(this.p[AA], x, y, z),
+                    this.grad(this.p[BA], x - 1, y, z)),
+                this.lerp(u, this.grad(this.p[AB], x, y - 1, z),
+                    this.grad(this.p[BB], x - 1, y - 1, z))),
+            this.lerp(v,
+                this.lerp(u, this.grad(this.p[AA + 1], x, y, z - 1),
+                    this.grad(this.p[BA + 1], x - 1, y, z - 1)),
+                this.lerp(u, this.grad(this.p[AB + 1], x, y - 1, z - 1),
+                    this.grad(this.p[BB + 1], x - 1, y - 1, z - 1))));
+    }
+}</code></pre>
+        </details>
+
+        <details class="code-block">
+            <summary>View Terrain Generation Process</summary>
+            <pre><code class="language-js">// Generate height based on multi-octave noise
+function generateTerrain(waterLevel, mountainFreq, smoothness) {
+    const size = 50;
+    const resolution = 100;
+    const vertices = [];
+    const colors = [];
+
+    const perlin = new PerlinNoise();
+    for (let z = 0; z <= resolution; z++) {
+        for (let x = 0; x <= resolution; x++) {
+            const nx = x / resolution - 0.5;
+            const nz = z / resolution - 0.5;
+            let height = 0;
+            let amp = 1, freq = 0.03;
+
+            for (let o = 0; o < smoothness; o++) {
+                height += perlin.noise(nx * freq, nz * freq, 0) * amp;
+                amp *= 0.5;
+                freq *= 2;
+            }
+
+            height *= mountainFreq;
+            vertices.push([nx * size, height, nz * size]);
+
+            // Assign color based on height
+            let color;
+            if (height < waterLevel) color = [0.1, 0.3, 0.6];
+            else if (height < waterLevel + 0.05) color = [0.9, 0.85, 0.6];
+            else if (height < 0.4) color = [0.3, 0.7, 0.2];
+            else if (height < 0.6) color = [0.5, 0.5, 0.5];
+            else color = [0.9, 0.9, 0.95];
+            colors.push(color);
+        }
+    }
+}</code></pre>
+        </details>
+
+        <details class="code-block">
+            <summary>View Shading Explanation</summary>
+            <pre><code class="language-js">// Lighting is done using Phong shading:
+// finalColor = ambient + diffuse + specular
+
+// Ambient: constant low light
+// Diffuse: based on angle between surface and light
+// Specular: shiny highlights (controlled by power)
+</code></pre>
+        </details>
+    </section>
+
+    <!-- Prism.js JS -->
+    <script src="https://cdn.jsdelivr.net/npm/prismjs/prism.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs/components/prism-javascript.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs/components/prism-markup.min.js"></script>
+
+    <footer class="site-footer">
+        <div class="footer-content">
+            <div class="footer-left">
+                <h3>3D Biome Generator</h3>
+                <p>Procedural terrain rendering using Perlin noise and WebGL.</p>
+            </div>
+            <div class="footer-links">
+                <a href="../../index.html">Home</a>
+                <a href="https://richard080481.github.io/" target="_blank">Portfolio</a>
+                <a href="mailto:yh.richard.wang@gmail.com" target="_blank">Contact</a>
+                <a href="https://github.com/Richard080481" target="_blank">GitHub</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>© 2025 Yung-Hsiang Wang (Richard) — Built with Love and GitHub Pages</p>
+        </div>
+    </footer>
+</body>
+</html>
