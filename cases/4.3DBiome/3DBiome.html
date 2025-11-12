@@ -4,11 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WebGL Biome Generator</title>
-    <link rel="stylesheet" href="../../styles.css"/>
     <link rel="stylesheet" href="3DBiome.css"/>
+    <link rel="stylesheet" href="../../styles.css"/>
+    <link href="https://cdn.jsdelivr.net/npm/prismjs/themes/prism-tomorrow.css" rel="stylesheet" />
 </head>
 <body>
-    <canvas id="glCanvas"></canvas>
+    <div class="container">
+        <h1>3D Biome Terrain Generator</h1>
+        <p>Generate and explore procedurally created 3D biomes using Perlin noise!</p>
+        <br><br>
+    <canvas id="glCanvas" width="512" height="512"></canvas>
     <div id="ui">
         <button id="generateBtn">Generate New Terrain</button>
 
@@ -32,18 +37,13 @@
             <input type="range" id="smoothness" min="1" max="10" step="1" value="3">
         </div>
 
-        <div class="control-group">
-            <label>
-                <input type="checkbox" id="pixelated" checked> Pixelated/Voxel Style (Minecraft-like)
-            </label>
-        </div>
-
         <div id="info">Adjust settings and generate!</div>
     </div>
 
     <script src="3DBiome.js"></script>
-
-        <h1>Explanation</h1>
+    <a href="../../index.html" class="btn">← Back to All Cases</a>
+    </div>
+<h1>Explanation</h1>
     <section class="code-section">
         <h2>How It Works</h2>
         <p>
@@ -60,7 +60,6 @@
             <li><strong>Water Level:</strong> Adjusts the cutoff height separating land and ocean.</li>
             <li><strong>Mountain Frequency:</strong> Controls the roughness and steepness of terrain.</li>
             <li><strong>Smoothness:</strong> Defines how many noise octaves are layered for detail.</li>
-            <li><strong>Voxel Style:</strong> Toggles between smooth shading and pixelated Minecraft-like look.</li>
         </ul>
 
         <p>
@@ -163,17 +162,6 @@ function generateTerrain(waterLevel, mountainFreq, smoothness) {
         }
     }
 }</code></pre>
-        </details>
-
-        <details class="code-block">
-            <summary>View Shading Explanation</summary>
-            <pre><code class="language-js">// Lighting is done using Phong shading:
-// finalColor = ambient + diffuse + specular
-
-// Ambient: constant low light
-// Diffuse: based on angle between surface and light
-// Specular: shiny highlights (controlled by power)
-</code></pre>
         </details>
     </section>
 
