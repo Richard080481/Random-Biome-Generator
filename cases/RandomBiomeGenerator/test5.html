@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>WebGL2 Minecraft-like Map Generator</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:Arial,Helvetica,sans-serif;background:#111;color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+  .container{display:flex;gap:24px;max-width:1200px;width:100%;align-items:flex-start}
+  canvas{border:3px solid #00aa00;background:#000;image-rendering:pixelated}
+  .controls{background:rgba(0,0,0,0.9);padding:20px;border-radius:8px;border:2px solid #00aa00;min-width:300px}
+  .controls h2{color:#00ff00;margin-bottom:12px}
+  .control-group{margin-bottom:14px}
+  label{display:block;color:#aaa;font-weight:700;margin-bottom:6px;font-size:13px}
+  input,select{width:100%;padding:8px;border-radius:4px;background:#222;border:1px solid #00aa00;color:#0f0}
+  input[type="range"]{appearance:none}
+  button{width:100%;padding:10px;margin-bottom:8px;background:#00aa00;color:#000;border:none;border-radius:6px;font-weight:700;cursor:pointer}
+  button:hover{background:#00ff00}
+  .value-display{float:right;color:#00ff00}
+  .info-box{margin-top:12px;padding:12px;border-radius:6px;border:2px solid #00aa00;background:rgba(0,0,0,0.8);font-size:13px}
+          .biome-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .biome-color {
+            width: 24px;
+            height: 24px;
+            border-radius: 2px;
+            margin-right: 12px;
+            border: 1px solid #666;
+        }
+
+        .info-box {
+            background: rgba(0, 0, 0, 0.9);
+            padding: 20px;
+            border-radius: 8px;
+            border: 2px solid #00aa00;
+            font-size: 12px;
+            margin-top: 20px;
+        }
+
+        .info-box h3 {
+            color: #00ff00;
+            margin-bottom: 12px;
+            font-size: 14px;
+        }
+</style>
+</head>
+<body>
+<div class="container">
+  <div>
+    <canvas id="glCanvas" width="512" height="512"></canvas>
+  </div>
+  <div class="controls">
+    <h2>🎮 WebGL 地圖生成器</h2>
+
+    <div class="control-group">
+      <label>Seed:</label>
+      <input id="seed" type="number" min="0" max="9999999" value="42">
+    </div>
+
+    <div class="control-group">
+      <label>Map Size:</label>
+      <select id="mapSize">
+        <option value="256">256 × 256</option>
+        <option value="512" selected>512 × 512</option>
+        <option value="1024">1024 × 1024</option>
+        <option value="2048">2048 × 2048</option>
+      </select>
+    </div>
+
+    <div class="control-group">
+      <label>Block Size (pixel blocks):</label>
+      <select id="blockSize">
+        <option value="1">1px</option>
+        <option value="2" selected>2px</option>
+        <option value="4">4px</option>
+        <option value="8">8px</option>
+      </select>
+    </div>
+
+    <div class="control-group">
+      <label>Scale: <span class="value-display" id="scaleValue">50</span></label>
+      <input id="scale" type="range" min="10" max="300" value="50">
+    </div>
+
+    <div class="control-group">
+      <label>Persistence: <span class="value-display" id="persistenceValue">0.5</span></label>
+      <input id="persistence" type="range" min="0.1" max="0.9" step="0.05" value="0.5">
+    </div>
+
+    <div class="control-group">
+      <label>Lacunarity: <span class="value-display" id="lacunarityValue">2.0</span></label>
+      <input id="lacunarity" type="range" min="1.0" max="4.0" step="0.1" value="2.0">
+    </div>
+
+    <div class="control-group">
+      <label>Octaves: <span class="value-display" id="octavesValue">6</span></label>
+      <input id="octaves" type="range" min="1" max="8" value="6">
+    </div>
+
+    <button id="generate">🔄 Generate Map</button>
+    <button id="download">⬇️ Download PNG</button>
+
+    <div class="info-box">
+      <h3>Biomes：</h3>
+        <div class="biome-item">
+            <div class="biome-color" style="background: #1a47a8;"></div>
+            <span>Deep Water</span>
+        </div>
+        <div class="biome-item">
+            <div class="biome-color" style="background: #3366ff;"></div>
+            <span>Water</span>
+        </div>
+        <div class="biome-item">
+            <div class="biome-color" style="background: #ffaa00;"></div>
+            <span>Sand/Desert</span>
+        </div>
+        <div class="biome-item">
+            <div class="biome-color" style="background: #33aa33;"></div>
+            <span>Grass</span>
+        </div>
+        <div class="biome-item">
+            <div class="biome-color" style="background: #1a6b1a;"></div>
+            <span>Forest</span>
+        </div>
+        <div class="biome-item">
+            <div class="biome-color" style="background: #888888;"></div>
+            <span>Stone</span>
+        </div>
+        <div class="biome-item">
+            <div class="biome-color" style="background: #ffffff;"></div>
+            <span>Snow</span>
+        </div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+/*
+ WebGL2 map generator
+ - fragment shader 做 2D fbm(noise) + biome mapping
+ - 低解析度渲染再放大 (使用 nearest filtering) 以呈現 pixelated 方塊
+*/
+
+// ---- GLSL shader sources ----
+const vsSource = `#version 300 es
+precision highp float;
+in vec2 a_pos;
+out vec2 v_uv;
+void main() {
+  v_uv = a_pos * 0.5 + 0.5;
+  gl_Position = vec4(a_pos, 0.0, 1.0);
+}
+`;
+
+// Fragment shader: hash / noise / fbm adapted from Inigo Quilez style
+const fsSource = `#version 300 es
+precision highp float;
+out vec4 outColor;
+in vec2 v_uv;
+
+uniform vec2 u_resolution;   // framebuffer resolution (displaySize)
+uniform float u_seed;
+uniform float u_scale;
+uniform float u_persistence;
+uniform float u_lacunarity;
+uniform int u_octaves;
+
+// color palette as vec3 array (hard-coded)
+vec3 biomeColor(float h) {
+  if (h < 0.20) return vec3(0.102,0.278,0.659); // deep water #1a47a8
+  if (h < 0.35) return vec3(0.2,0.4,1.0);       // water #3366ff
+  if (h < 0.45) return vec3(1.0,0.666,0.0);     // sand #ffaa00
+  if (h < 0.55) return vec3(0.2,0.667,0.2);     // grass #33aa33
+  if (h < 0.65) return vec3(0.102,0.422,0.102); // forest #1a6b1a
+  if (h < 0.80) return vec3(0.533,0.533,0.533); // stone #888888
+  return vec3(1.0,1.0,1.0);                     // snow #ffffff
+}
+
+// 2D hash
+float hash21(vec2 p) {
+  p = fract(p * vec2(123.34, 456.21) + u_seed);
+  p += dot(p, p + 45.32);
+  return fract(p.x * p.y);
+}
+
+// value noise
+float noise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  // four corners
+  float a = hash21(i + vec2(0.0,0.0));
+  float b = hash21(i + vec2(1.0,0.0));
+  float c = hash21(i + vec2(0.0,1.0));
+  float d = hash21(i + vec2(1.0,1.0));
+  vec2 u = f*f*(3.0 - 2.0*f);
+  return mix(a, b, u.x) + (c - a)*u.y*(1.0 - u.x) + (d - b)*u.x*u.y;
+}
+
+// fbm (fractal brownian motion)
+float fbm(vec2 p) {
+  float amplitude = 1.0;
+  float frequency = 1.0;
+  float sum = 0.0;
+  float norm = 0.0;
+  for (int i = 0; i < 12; i++) {
+    if(i >= u_octaves) break;
+    sum += amplitude * noise(p * frequency);
+    norm += amplitude;
+    amplitude *= u_persistence;
+    frequency *= u_lacunarity;
+  }
+  return sum / norm;
+}
+
+void main() {
+  // compute integer pixel coords in the low-res framebuffer
+  vec2 fragCoord = v_uv * u_resolution;
+
+  // normalized coords centered
+  vec2 uv = fragCoord / u_resolution;
+
+  // use uv scaled by user scale param
+  float s = max(0.0001, u_scale);
+  vec2 p = (fragCoord / s);
+
+  // get fbm value
+  float h = fbm(p);
+
+  // optionally add a subtle radial falloff to form continents (nice effect)
+  vec2 center = u_resolution * 0.5;
+  float dist = distance(fragCoord, center) / max(u_resolution.x, u_resolution.y);
+  // tweak: reduce height near edges
+  h = mix(h, h * (1.0 - smoothstep(0.45, 0.85, dist)), 0.9);
+
+  // clamp
+  h = clamp(h, 0.0, 1.0);
+
+  vec3 col = biomeColor(h);
+
+  outColor = vec4(col, 1.0);
+}
+`;
+
+// ---- helper functions ----
+function createShader(gl, type, source) {
+  const sh = gl.createShader(type);
+  gl.shaderSource(sh, source);
+  gl.compileShader(sh);
+  if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+    console.error('Shader compile error:', gl.getShaderInfoLog(sh));
+    gl.deleteShader(sh);
+    return null;
+  }
+  return sh;
+}
+
+function createProgram(gl, vs, fs) {
+  const prog = gl.createProgram();
+  gl.attachShader(prog, vs);
+  gl.attachShader(prog, fs);
+  gl.bindAttribLocation(prog, 0, "a_pos");
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+    console.error('Program link error:', gl.getProgramInfoLog(prog));
+    gl.deleteProgram(prog);
+    return null;
+  }
+  return prog;
+}
+
+// ---- WebGL initialization ----
+const canvas = document.getElementById('glCanvas');
+const gl = canvas.getContext('webgl2', {preserveDrawingBuffer:true});
+if (!gl) {
+  alert('你的瀏覽器不支援 WebGL2。');
+  throw new Error('no webgl2');
+}
+
+// compile shaders & program
+const vs = createShader(gl, gl.VERTEX_SHADER, vsSource);
+const fs = createShader(gl, gl.FRAGMENT_SHADER, fsSource);
+const program = createProgram(gl, vs, fs);
+
+// full-screen quad (two triangles)
+const quadBuffer = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
+const quadVerts = new Float32Array([
+  -1, -1,
+   1, -1,
+  -1,  1,
+  -1,  1,
+   1, -1,
+   1,  1,
+]);
+gl.bufferData(gl.ARRAY_BUFFER, quadVerts, gl.STATIC_DRAW);
+
+// set up attribute
+gl.enableVertexAttribArray(0);
+gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+// get uniform locations
+const u_resolution = gl.getUniformLocation(program, 'u_resolution');
+const u_seed = gl.getUniformLocation(program, 'u_seed');
+const u_scale = gl.getUniformLocation(program, 'u_scale');
+const u_persistence = gl.getUniformLocation(program, 'u_persistence');
+const u_lacunarity = gl.getUniformLocation(program, 'u_lacunarity');
+const u_octaves = gl.getUniformLocation(program, 'u_octaves');
+
+// UI bindings
+const seedEl = document.getElementById('seed');
+const mapSizeEl = document.getElementById('mapSize');
+const blockSizeEl = document.getElementById('blockSize');
+const scaleEl = document.getElementById('scale');
+const persistenceEl = document.getElementById('persistence');
+const lacunarityEl = document.getElementById('lacunarity');
+const octavesEl = document.getElementById('octaves');
+
+const scaleValue = document.getElementById('scaleValue');
+const persistenceValue = document.getElementById('persistenceValue');
+const lacunarityValue = document.getElementById('lacunarityValue');
+const octavesValue = document.getElementById('octavesValue');
+
+scaleEl.addEventListener('input', ()=> scaleValue.textContent = scaleEl.value);
+persistenceEl.addEventListener('input', ()=> persistenceValue.textContent = persistenceEl.value);
+lacunarityEl.addEventListener('input', ()=> lacunarityValue.textContent = lacunarityEl.value);
+octavesEl.addEventListener('input', ()=> octavesValue.textContent = octavesEl.value);
+
+// draw function: renders low-res framebuffer then upscales to canvas with nearest-neighbor
+function render() {
+  // read UI
+  const mapSize = parseInt(mapSizeEl.value, 10);
+  const blockSize = parseInt(blockSizeEl.value, 10);
+  const displaySize = Math.max(1, Math.floor(mapSize / blockSize)); // framebuffer resolution
+  const pixelScale = blockSize;
+
+  // set canvas pixel size to real map size (so download is full size)
+  canvas.width = mapSize;
+  canvas.height = mapSize;
+  // set CSS size to keep canvas visually reasonable (canvas will be larger but we can scale with CSS)
+  canvas.style.width = Math.min(600, mapSize) + 'px';
+  canvas.style.height = canvas.style.width;
+
+  // set viewport to low-res framebuffer but we'll draw to full canvas and emulate pixelation:
+  // We'll render to a smaller offscreen framebuffer (texture) then draw it stretched using NEAREST.
+  // Create or resize a temporary framebuffer with texture
+  // For simplicity we can use the default framebuffer but adjust viewport and then copy upscaled via texImage2D.
+  // Simpler approach: render directly using gl.viewport to low res, then copy into canvas scaled using nearest by drawing a screen quad that samples the low-res texture.
+  // We'll implement an offscreen texture pipeline.
+
+  // Offscreen texture & framebuffer
+  const fb = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+
+  const tex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, displaySize, displaySize, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  // nearest filtering to preserve pixel blocks
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+
+  // render into offscreen at low res
+  gl.viewport(0, 0, displaySize, displaySize);
+  gl.useProgram(program);
+  gl.uniform2f(u_resolution, displaySize, displaySize);
+  gl.uniform1f(u_seed, Number(seedEl.value) || 0.0);
+  gl.uniform1f(u_scale, Number(scaleEl.value));
+  gl.uniform1f(u_persistence, Number(persistenceEl.value));
+  gl.uniform1f(u_lacunarity, Number(lacunarityEl.value));
+  gl.uniform1i(u_octaves, Number(octavesEl.value));
+
+  // clear and draw
+  gl.clearColor(0,0,0,1);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+  // now draw the offscreen texture to the default framebuffer stretched to canvas size with NEAREST
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  // prepare a simple textured draw: reuse shader by reading tex in shader? For brevity we can use gl.copyTexSubImage2D -> but copyTexSubImage2D copies from framebuffer to texture.
+  // Simpler: use gl.viewport to full canvas and draw using a quick textured program.
+  // We'll create a small textured program now.
+
+  // textured quad shader sources
+  const vsTex = `#version 300 es
+  in vec2 a_pos;
+  out vec2 v_uv;
+  void main(){ v_uv = a_pos*0.5+0.5; gl_Position = vec4(a_pos,0.0,1.0); }`;
+  const fsTex = `#version 300 es
+  precision highp float;
+  in vec2 v_uv;
+  uniform sampler2D u_tex;
+  out vec4 c;
+  void main(){ c = texture(u_tex, v_uv); }`;
+
+  // compile / link (cache would be better; recreate each frame is fine for this demo)
+  const vsT = createShader(gl, gl.VERTEX_SHADER, vsTex);
+  const fsT = createShader(gl, gl.FRAGMENT_SHADER, fsTex);
+  const progTex = createProgram(gl, vsT, fsT);
+
+  gl.useProgram(progTex);
+  // set attribute again
+  gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
+  gl.enableVertexAttribArray(0);
+  gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+  // bind the low-res texture to unit0
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  const loc = gl.getUniformLocation(progTex, 'u_tex');
+  gl.uniform1i(loc, 0);
+
+  // set viewport to full canvas (mapSize x mapSize)
+  gl.viewport(0, 0, canvas.width, canvas.height);
+  // ensure NEAREST filtering still in effect
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+
+  gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+  // cleanup (delete temporary objects)
+  gl.deleteProgram(progTex);
+  gl.deleteShader(vsT);
+  gl.deleteShader(fsT);
+  gl.deleteFramebuffer(fb);
+  gl.deleteTexture(tex);
+}
+
+// initial render
+render();
+
+// UI buttons
+document.getElementById('generate').addEventListener('click', () => {
+  render();
+});
+
+// download: canvas.toDataURL works because we set preserveDrawingBuffer:true
+document.getElementById('download').addEventListener('click', () => {
+  const link = document.createElement('a');
+  link.href = canvas.toDataURL('image/png');
+  link.download = 'webgl_minecraft_map.png';
+  link.click();
+});
+</script>
+</body>
+</html>
